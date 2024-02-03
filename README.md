@@ -1,1 +1,5 @@
 # Dynamic_embedding_recommender
+
+Modern recommenders heavily leverage embeddings to create vector representations of each user and candidate item. These embedding can then be used to calculate the similarity between users and items, so that users are recommended candidate items that are more interesting and relevant. But when working with data at scale, particularly in an online machine learning setting, embedding tables can grow in size dramatically, accumulating millions (and sometimes billions) of items. At this scale, it becomes impossible to store these embedding tables in memory. Furthermore, a large portion of the items might be rarely seen, so it does not make sense to keep dedicated embeddings for such rarely occurring items. A better solution would be to represent those items with one common embedding. This can dramatically reduce the size of the embedding table at a very small fraction of the performance cost. This is the main motivation behind dynamic embedding tables.
+
+[Reference](https://blog.tensorflow.org/2023/04/training-recommendation-model-with-dynamic-embeddings.html?linkId=9286461)
