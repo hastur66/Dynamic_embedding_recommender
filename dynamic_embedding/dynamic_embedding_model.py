@@ -2,7 +2,7 @@ import tensorflow as tf
 import tensorflow_recommenders as tfrs
 import tensorflow_recommenders_addons.dynamic_embedding as de
 from typing import Dict
-from dynamic_embedding import max_token_length
+from dynamic_embedding.config import max_token_length
 from data_pipeline import create_datasets
 from basic_model import get_user_id_lookup_layer, get_movie_title_lookup_layer
 
@@ -45,7 +45,6 @@ def build_de_item_model(movie_title_lookup_layer: tf.keras.layers.StringLookup) 
         tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1))
     ])
 
-"""### Defining the callback to control and log dynamic embeddings"""
 
 class DynamicEmbeddingCallback(tf.keras.callbacks.Callback):
 
@@ -80,11 +79,8 @@ class DynamicEmbeddingCallback(tf.keras.callbacks.Callback):
                 self.model.dynamic_embedding_history.setdefault(f"embedding_size_{k}", []).append(v)
             self.model.dynamic_embedding_history.setdefault(f"step", []).append(batch+1)
 
-"""## Defining two tower model with dynamic embeddings"""
 
 class DynamicEmbeddingTwoTowerModel(tfrs.Model):
-  # We derive from a custom base class to help reduce boilerplate. Under the hood,
-  # these are still plain Keras Models.
 
     def __init__(self,user_model: tf.keras.Model,item_model: tf.keras.Model,task: tfrs.tasks.Retrieval):
         super().__init__()
@@ -136,36 +132,40 @@ def create_de_two_tower_model(dataset: tf.data.Dataset, candidate_dataset: tf.da
 
     return model
 
-datasets = create_datasets()
-de_model = create_de_two_tower_model(datasets.training_datasets.train_ds, datasets.candidate_dataset)
-
-"""### Training the model with dynamic embeddings
-
-"""
-
-epochs = 10
-
-history_de = {}
-history_de_size = {}
-de_callback = DynamicEmbeddingCallback(de_model, steps_per_logging=20)
-
-for epoch in range(epochs):
-
+def train_de_model():
     datasets = create_datasets()
-    train_steps = len(datasets.training_datasets.train_ds)
+    de_model = create_de_two_tower_model(datasets.training_datasets.train_ds, datasets.candidate_dataset)
 
-    hist = de_model.fit(
-        datasets.training_datasets.train_ds,
-        epochs=1,
-        validation_data=datasets.training_datasets.validation_ds,
-        callbacks=[de_callback]
-    )
+    epochs = 10
 
-    for k,v in de_model.dynamic_embedding_history.items():
-        if k=="step":
-            v = [vv+(epoch*train_steps) for vv in v]
-        history_de_size.setdefault(k, []).extend(v)
+    history_de = {}
+    history_de_size = {}
+    de_callback = DynamicEmbeddingCallback(de_model, steps_per_logging=20)
 
-    for k,v in hist.history.items():
-        history_de.setdefault(k, []).extend(v)
+    for epoch in range(epochs):
 
+        datasets = create_datasets()
+        train_steps = len(datasets.training_datasets.train_ds)
+
+        hist = de_model.fit(
+            datasets.training_datasets.train_ds,
+            epochs=1,
+            validation_data=datasets.training_datasets.validation_ds,
+            callbacks=[de_callback]
+        )
+
+        for k,v in de_model.dynamic_embedding_history.items():
+            if k=="step":
+                v = [vv+(epoch*train_steps) for vv in v]
+            history_de_size.setdefault(k, []).extend(v)
+
+        for k,v in hist.history.items():
+            history_de.setdefault(k, []).extend(v)
+
+    return de_model, history_de, history_de_size
+
+if __name__ == "__main__":
+    de_model, history_de, history_de_size = train_de_model()
+    de_model.save("models/dynamic_embedding_model")
+    print(history_de)
+    print(history_de_size)

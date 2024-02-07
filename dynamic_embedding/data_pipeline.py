@@ -4,22 +4,14 @@ import dataclasses
 import functools
 from dynamic_embedding.config import max_token_length, punctuation_regex, pad_token, batch_size, seed
 
-# https://www.tensorflow.org/datasets/catalog/movielens
-# Interactions dataset
-raw_ratings_dataset = tfds.load("movielens/1m-ratings", split="train")
-# Candidates dataset
-raw_movies_dataset = tfds.load("movielens/1m-movies", split="train")
 
-df = tfds.as_dataframe(raw_ratings_dataset.take(100))
-df.head()
-
-df = tfds.as_dataframe(raw_movies_dataset.take(100))
-df.head()
-
-for item in raw_ratings_dataset.take(1):
-  print(item)
-
-"""### Processing datasets"""
+def load_datasets():
+    # https://www.tensorflow.org/datasets/catalog/movielens
+    # Interactions dataset
+    raw_ratings_dataset = tfds.load("movielens/1m-ratings", split="train")
+    # Candidates dataset
+    raw_movies_dataset = tfds.load("movielens/1m-movies", split="train")
+    return raw_ratings_dataset, raw_movies_dataset
 
 
 def process_text(x: tf.Tensor, max_token_length: int, punctuation_regex: str) -> tf.Tensor:
@@ -51,7 +43,7 @@ def process_ratings_dataset(ratings_dataset: tf.data.Dataset) -> tf.data.Dataset
 
 
 def process_movies_dataset(movies_dataset: tf.data.Dataset) -> tf.data.Dataset:
-
+    raw_ratings_dataset, raw_movies_dataset = load_datasets()
     partial_process_text = functools.partial(
         process_text, max_token_length=max_token_length, punctuation_regex=punctuation_regex
     )
@@ -62,14 +54,15 @@ def process_movies_dataset(movies_dataset: tf.data.Dataset) -> tf.data.Dataset:
 
     return processed_dataset
 
-processed_ratings_dataset = process_ratings_dataset(raw_ratings_dataset)
-for item in processed_ratings_dataset.take(3):
-    print(item)
 
-train_size = int(len(processed_ratings_dataset) * 0.9)
-validation_size = len(processed_ratings_dataset) - train_size
-print(f"Train size: {train_size}")
-print(f"Validation size: {validation_size}")
+def process_and_get_dataset_info(raw_ratings_dataset):
+    processed_ratings_dataset = process_ratings_dataset(raw_ratings_dataset, max_token_length, punctuation_regex)
+    train_size = int(len(processed_ratings_dataset) * 0.9)
+    validation_size = len(processed_ratings_dataset) - train_size
+    print(f"Train size: {train_size}")
+    print(f"Validation size: {validation_size}")
+    return train_size, validation_size
+
 
 @dataclasses.dataclass(frozen=True)
 class TrainingDatasets:
@@ -80,6 +73,7 @@ class TrainingDatasets:
 class RetrievalDatasets:
     training_datasets: TrainingDatasets
     candidate_dataset: tf.data.Dataset
+
 
 def pad_and_batch_ratings_dataset(dataset: tf.data.Dataset) -> tf.data.Dataset:
 
@@ -94,6 +88,7 @@ def pad_and_batch_ratings_dataset(dataset: tf.data.Dataset) -> tf.data.Dataset:
         }
     )
 
+
 def pad_and_batch_candidate_dataset(movies_dataset: tf.data.Dataset) -> tf.data.Dataset:
     return movies_dataset.padded_batch(
         batch_size,
@@ -103,7 +98,7 @@ def pad_and_batch_candidate_dataset(movies_dataset: tf.data.Dataset) -> tf.data.
 
 
 def split_train_validation_datasets(ratings_dataset: tf.data.Dataset) -> TrainingDatasets:
-
+    train_size, validation_size = process_and_get_dataset_info(ratings_dataset)
     shuffled_dataset = ratings_dataset.shuffle(buffer_size=5*batch_size, seed=seed)
     train_ds = shuffled_dataset.skip(validation_size).shuffle(buffer_size=10*batch_size).apply(pad_and_batch_ratings_dataset)
     validation_ds = shuffled_dataset.take(validation_size).apply(pad_and_batch_ratings_dataset)
@@ -124,6 +119,7 @@ def create_datasets() -> RetrievalDatasets:
 
     return RetrievalDatasets(training_datasets=training_datasets, candidate_dataset=candidate_dataset)
 
-datasets = create_datasets()
-print(f"Train dataset size (after batching): {len(datasets.training_datasets.train_ds)}")
-print(f"Validation dataset size (after batching): {len(datasets.training_datasets.validation_ds)}")
+if __name__ == "__main__":
+    train_ds, validation_ds, candidate_dataset = create_datasets()
+    print(f"Train dataset size (after batching): {len(train_ds)}")
+    print(f"Validation dataset size (after batching): {len(validation_ds)}")

@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow_recommenders as tfrs
 from typing import Dict
-from dynamic_embedding import pad_token, max_token_length
+from dynamic_embedding.config import pad_token, max_token_length
 from data_pipeline import create_datasets
 
 def get_user_id_lookup_layer(dataset: tf.data.Dataset) -> tf.keras.layers.Layer:
@@ -40,17 +40,6 @@ def build_item_model(movie_title_lookup_layer: tf.keras.layers.StringLookup):
     ], name="item_model")
 
 
-datasets = create_datasets()
-"""Testing the lookup layers"""
-
-user_id_lookup_layer = get_user_id_lookup_layer(datasets.training_datasets.train_ds)
-print(f"Vocabulary size (user_id): {len(user_id_lookup_layer.get_vocabulary())}")
-
-movie_title_lookup_layer = get_movie_title_lookup_layer(datasets.training_datasets.train_ds)
-print(f"Vocabulary size (movie_title): {len(movie_title_lookup_layer.get_vocabulary())}")
-
-"""## Defining the two tower model (without dynamic embeddings)"""
-
 class TwoTowerModel(tfrs.Model):
   # We derive from a custom base class to help reduce boilerplate. Under the hood,
   # these are still plain Keras Models.
@@ -70,7 +59,6 @@ class TwoTowerModel(tfrs.Model):
         movie_embeddings = self.item_model(features["movie_title"])
         return self.task(user_embeddings, movie_embeddings)
 
-"""### Creating the model"""
 
 def create_two_tower_model(dataset: tf.data.Dataset, candidate_dataset: tf.data.Dataset) -> tf.keras.Model:
     user_id_lookup_layer = get_user_id_lookup_layer(dataset)
@@ -88,12 +76,23 @@ def create_two_tower_model(dataset: tf.data.Dataset, candidate_dataset: tf.data.
 
     return model
 
-model = create_two_tower_model(datasets.training_datasets.train_ds, datasets.candidate_dataset)
 
-"""### Training the model"""
+def train_model():
+    datasets = create_datasets()
 
-history = model.fit(datasets.training_datasets.train_ds,
-                    epochs=10,
-                    validation_data=datasets.training_datasets.validation_ds)
+    model = create_two_tower_model(datasets.training_datasets.train_ds, datasets.candidate_dataset)
 
-history_standard = history.history
+    """### Training the model"""
+
+    history = model.fit(datasets.training_datasets.train_ds,
+                        epochs=10,
+                        validation_data=datasets.training_datasets.validation_ds)
+
+    history_standard = history.history
+    return model, history_standard
+
+
+if __name__ == "__main__":
+    model, history_standard = train_model()
+    model.save("models/basic_model")
+    print(history_standard)
