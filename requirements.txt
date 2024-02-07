@@ -1,0 +1,4 @@
+tensorflow == 2.5.1
+tensorflow-recommenders-addons == 0.6.0
+tensorflow-datasets == 4.9.0
+dataclasses == 0.8
